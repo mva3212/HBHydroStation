@@ -1,19 +1,30 @@
 
+
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <JeeLib.h>
+#include <avr/wdt.h>
+
 #define freq RF12_433MHZ                                                // Frequency of RF12B module can be RF12_433MHZ, RF12_868MHZ or RF12_915MHZ. You should use the one matching the module you have.
 const int nodeID = 11;
 const int networkGroup = 88;
 
-const int DEBUG =1;
+const int DEBUG =0;
 const int UNO = 1;
 
-#include <avr/wdt.h>
+#define phPin 14
+// Data wire is plugged into port 2 on the Arduino
+#define ONE_WIRE_BUS 5
 
-#include <JeeLib.h>
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire);
 
 ISR(WDT_vect) {
   Sleepy::watchdogEvent();
 }
-#define phPin 14
 
 typedef struct { int ph, temp, ec; } Payload;
 Payload ptx;
@@ -29,8 +40,8 @@ void setup() {
     Serial.begin(57600);
     Serial.println("HydroStation initializing");
   }
- 
-   pinMode(reading_pin, INPUT);
+  sensors.begin();
+  pinMode(reading_pin, INPUT);
   pinMode(enable_pin, OUTPUT);
   rf12_initialize(nodeID, freq, networkGroup);                                       // initialize RF
   rf12_sleep(RF12_SLEEP);
@@ -39,13 +50,16 @@ void setup() {
 
 void loop()
 {  
+  sensors.requestTemperatures();
   digitalWrite(enable_pin, HIGH);
   if (UNO) wdt_reset();
+  
   long f =  getFrequency(reading_pin);
   reading = analogRead(phPin);
+  
   ph = calculatePH();
   ptx.ph = ph * 100;
-  ptx.temp = 0;
+  ptx.temp = DallasTemperature::toFahrenheit(sensors.getTempCByIndex(0));
   ptx.ec = f;
   if(DEBUG)  print_to_serial();
   
